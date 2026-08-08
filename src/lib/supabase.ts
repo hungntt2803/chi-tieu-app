@@ -1,13 +1,24 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+const supabaseKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+  "";
 
-if (!supabaseUrl || !supabaseKey) {
+export const hasSupabaseEnv = Boolean(supabaseUrl && supabaseKey);
+
+if (!hasSupabaseEnv && process.env.NODE_ENV !== "production") {
   console.warn(
     "⚠️ Supabase environment variables are missing! " +
-    "Please define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in your .env.local file."
+      "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY " +
+      "(or NEXT_PUBLIC_SUPABASE_ANON_KEY)."
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Dùng placeholder khi thiếu env để `next build` / Vercel không crash lúc collect page data.
+// Runtime API sẽ trả lỗi rõ ràng nếu chưa cấu hình.
+const url = hasSupabaseEnv ? supabaseUrl : "https://placeholder.supabase.co";
+const key = hasSupabaseEnv ? supabaseKey : "public-anon-key";
+
+export const supabase: SupabaseClient = createClient(url, key);

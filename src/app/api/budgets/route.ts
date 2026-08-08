@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireSupabaseEnv } from "@/lib/api-guard";
 import { Budget } from "@/types";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -22,6 +23,8 @@ function mapRow(b: BudgetRow): Budget {
 
 // GET /api/budgets?month=YYYY-MM  -> danh sách hạn mức của tháng (tổng + theo danh mục)
 export async function GET(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month");
@@ -59,6 +62,8 @@ export async function GET(request: NextRequest) {
 // PUT /api/budgets  -> upsert hạn mức cho (month, category).
 // category = null  => hạn mức tổng của tháng.
 export async function PUT(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const body = await request.json();
     const { month, category, amount } = body;

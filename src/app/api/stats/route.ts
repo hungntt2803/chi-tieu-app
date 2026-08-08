@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireSupabaseEnv } from "@/lib/api-guard";
 import { shiftMonth } from "@/lib/format";
 
 interface TxRow {
@@ -37,6 +38,8 @@ async function fetchMonth(month: string) {
 // GET /api/stats?month=YYYY-MM
 // Trả thống kê tháng hiện tại, tháng trước, và xu hướng 6 tháng.
 export async function GET(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const month = new URL(request.url).searchParams.get("month");
     if (!month) {

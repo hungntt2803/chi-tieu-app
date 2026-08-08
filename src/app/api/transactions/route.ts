@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireSupabaseEnv } from "@/lib/api-guard";
 import { Transaction, TransactionType } from "@/types";
 
 const VALID_TYPES: TransactionType[] = ["income", "expense"];
@@ -30,6 +31,8 @@ function mapRow(t: TxRow): Transaction {
 
 // GET /api/transactions?month=YYYY-MM
 export async function GET(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month"); // Format: YYYY-MM
@@ -103,6 +106,8 @@ export async function GET(request: NextRequest) {
 
 // POST /api/transactions
 export async function POST(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const body = await request.json();
     const { type, amount, category, date, notes } = body;
@@ -165,6 +170,8 @@ export async function POST(request: NextRequest) {
 
 // PUT /api/transactions
 export async function PUT(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const body = await request.json();
     const { id, type, amount, category, date, notes } = body;
@@ -241,6 +248,8 @@ export async function PUT(request: NextRequest) {
 
 // DELETE /api/transactions?id=id
 export async function DELETE(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

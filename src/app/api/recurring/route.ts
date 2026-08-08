@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { requireSupabaseEnv } from "@/lib/api-guard";
 import type { TransactionType } from "@/types";
 
 export interface RecurringTransaction {
@@ -62,6 +63,8 @@ function nextDateAfter(
 
 // GET /api/recurring
 export async function GET() {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const { data, error } = await supabase
       .from("recurring_transactions")
@@ -79,6 +82,8 @@ export async function GET() {
 
 // POST /api/recurring — tạo mới hoặc chạy phát sinh (action=run)
 export async function POST(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const body = await request.json();
 
@@ -166,6 +171,8 @@ export async function POST(request: NextRequest) {
 
 // DELETE /api/recurring?id=
 export async function DELETE(request: NextRequest) {
+  const missing = requireSupabaseEnv();
+  if (missing) return missing;
   try {
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
