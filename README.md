@@ -1,68 +1,65 @@
 # Chi Tiêu App — Quản lý tài chính cá nhân
 
 Ứng dụng theo dõi thu chi cá nhân (tiếng Việt), xây dựng bằng **Next.js 16
-(App Router) + React 19 + Tailwind CSS v4 + Supabase + lucide-react + recharts**.
+(App Router) + React 19 + Tailwind CSS v4 + Supabase Auth + lucide-react + recharts**.
 
-## Tính năng
+## Tính năng chính
 
-### Giai đoạn 1 — Nền tảng
-- Thêm / sửa / xóa giao dịch theo tháng.
-- **Thu nhập** và **Chi tiêu** (`type`).
-- Danh mục động từ Supabase (fallback mặc định).
-- Hạn mức tháng lưu trên Supabase + cache localStorage.
+- Đăng nhập **magic link (email)** — mỗi người một tài khoản, dữ liệu tách biệt (RLS).
+- Thu / chi, danh mục, ngân sách theo tháng & theo danh mục.
+- Dashboard + biểu đồ, lọc nâng cao, mã QR chia sẻ, dark mode, PWA.
 
-### Giai đoạn 2 — App thực tế
-- Dashboard: số dư, tổng thu, tổng chi + % so với tháng trước.
-- Biểu đồ: donut phân bổ chi, area xu hướng 6 tháng, bar thu vs chi.
-- Ngân sách theo từng danh mục + cảnh báo ≥90%.
-- Giao dịch định kỳ (`recurring_transactions`) — tự phát sinh khi mở app.
-- Lọc nâng cao (loại, danh mục, khoảng số tiền) + tìm kiếm.
-- Mã QR chia sẻ link app (nút trên header).
-- Toggle Dark/Light, PWA (manifest + service worker).
-- Toast (sonner), modal thêm giao dịch (FAB), modal xác nhận xóa.
+## Cấu hình môi trường
 
-## Cấu hình
-
-Tạo `.env.local`:
+`.env.local` / Vercel Environment Variables:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your-anon-or-publishable-key>
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon-key>
+NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 ```
 
-## Thiết lập database (Supabase SQL Editor)
+## Thiết lập Supabase (bắt buộc cho multi-user)
 
-Chạy lần lượt:
+### 1. SQL migrations (SQL Editor, lần lượt)
 
 1. `supabase/migrations/0001_init_finance_schema.sql`
 2. `supabase/migrations/0002_seed_default_categories.sql`
 3. `supabase/migrations/0003_recurring_transactions.sql`
-4. (Khuyến nghị) `supabase/seed/mock_transactions.sql` — dữ liệu mẫu 6 tháng
+4. **`supabase/migrations/0004_enable_auth_rls.sql`** ← bật RLS theo user
 
-## Chạy
+> Dữ liệu cũ không có `user_id` sẽ **không hiện** sau khi bật RLS (đúng ý: mỗi user bắt đầu sạch).
+> Muốn giữ mock cho 1 user: sau khi đăng nhập, lấy `user id` trong Authentication → Users rồi
+> `update transactions set user_id = '<uuid>' where user_id is null;` (tương tự budgets).
+
+### 2. Auth settings
+
+Supabase → **Authentication** → **URL Configuration**:
+
+- **Site URL**: `https://your-app.vercel.app` (hoặc `http://localhost:3000` khi dev)
+- **Redirect URLs** thêm:
+  - `http://localhost:3000/auth/callback`
+  - `https://your-app.vercel.app/auth/callback`
+
+Bật **Email** provider (magic link / OTP). Kiểm tra inbox (và Spam) khi nhận link.
+
+## Chạy local
 
 ```bash
 npm install
 npm run dev
 ```
 
-Mở [http://localhost:3000](http://localhost:3000).
-
-```bash
-npm run build
-npm run lint
-```
+Mở `/login` → nhập email → mở link trong email → vào app.
 
 ## Cấu trúc
 
 ```
 src/
-  app/page.tsx                 # UI chính
-  app/api/{transactions,categories,budgets,stats,recurring}/
-  components/                  # Dashboard, Charts, Form, List, Theme...
-  hooks/useLocalStorage.ts
-  lib/{supabase,categories,format}.ts
-  types/index.ts
-supabase/migrations|seed/
-public/{manifest.webmanifest,sw.js,icon-*.png}
+  app/login/                   # Trang đăng nhập
+  app/auth/callback/           # Đổi code → session
+  middleware.ts                # Bảo vệ route + refresh session
+  app/api/...                  # API gắn user_id + RLS
+  lib/supabase/{client,server,middleware,env}.ts
+supabase/migrations/0004_enable_auth_rls.sql
 ```

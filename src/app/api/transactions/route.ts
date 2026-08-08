@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { requireSupabaseEnv } from "@/lib/api-guard";
+import { requireUser } from "@/lib/api-guard";
 import { Transaction, TransactionType } from "@/types";
 
 const VALID_TYPES: TransactionType[] = ["income", "expense"];
-
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 interface TxRow {
@@ -29,14 +27,13 @@ function mapRow(t: TxRow): Transaction {
   };
 }
 
-// GET /api/transactions?month=YYYY-MM
 export async function GET(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
-  try {
-    const { searchParams } = new URL(request.url);
-    const month = searchParams.get("month"); // Format: YYYY-MM
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
 
+  try {
+    const month = new URL(request.url).searchParams.get("month");
     if (!month) {
       return NextResponse.json(
         { error: "Query parameter 'month' is required." },
@@ -47,11 +44,11 @@ export async function GET(request: NextRequest) {
     const { data: dbData, error } = await supabase
       .from("transactions")
       .select("*")
+      .eq("user_id", user.id)
       .gte("date", `${month}-01`)
       .lte("date", `${month}-31`);
 
     if (error) {
-      console.error("Supabase error fetching transactions:", error);
       return NextResponse.json(
         { error: `Database error: ${error.message}` },
         { status: 500 }
@@ -59,14 +56,11 @@ export async function GET(request: NextRequest) {
     }
 
     const transactions: Transaction[] = ((dbData || []) as TxRow[]).map(mapRow);
-
     const expenses = transactions.filter((t) => t.type === "expense");
     const incomes = transactions.filter((t) => t.type === "income");
+    const totalMonthlySpend = expenses.reduce((a, c) => a + c.amount, 0);
+    const totalMonthlyIncome = incomes.reduce((a, c) => a + c.amount, 0);
 
-    const totalMonthlySpend = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-    const totalMonthlyIncome = incomes.reduce((acc, curr) => acc + curr.amount, 0);
-
-    // Thống kê chi tiêu theo danh mục (chỉ tính expense)
     const statsMap: Record<string, number> = {};
     expenses.forEach((t) => {
       statsMap[t.category] = (statsMap[t.category] || 0) + t.amount;
@@ -77,14 +71,14 @@ export async function GET(request: NextRequest) {
         name,
         amount,
         percentage:
-          totalMonthlySpend > 0 ? Math.round((amount / totalMonthlySpend) * 100) : 0,
+          totalMonthlySpend > 0
+            ? Math.round((amount / totalMonthlySpend) * 100)
+            : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
 
     const sortedTransactions = [...transactions].sort((a, b) => {
-      if (a.date !== b.date) {
-        return b.date.localeCompare(a.date);
-      }
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
       return b.createdAt - a.createdAt;
     });
 
@@ -96,7 +90,6 @@ export async function GET(request: NextRequest) {
       categoryStats,
     });
   } catch (error) {
-    console.error("Internal Server Error in GET /api/transactions:", error);
     return NextResponse.json(
       { error: `Internal Server Error: ${errMsg(error)}` },
       { status: 500 }
@@ -104,31 +97,29 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/transactions
 export async function POST(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const body = await request.json();
     const { type, amount, category, date, notes } = body;
-
     const txType: TransactionType = VALID_TYPES.includes(type) ? type : "expense";
-
     const parsedAmount = parseFloat(amount);
+
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return NextResponse.json(
         { error: "Amount must be a positive number." },
         { status: 400 }
       );
     }
-
     if (!category || typeof category !== "string" || !category.trim()) {
       return NextResponse.json(
         { error: "A valid category is required." },
         { status: 400 }
       );
     }
-
     if (!date) {
       return NextResponse.json(
         { error: "Transaction date is required." },
@@ -140,6 +131,7 @@ export async function POST(request: NextRequest) {
       .from("transactions")
       .insert([
         {
+          user_id: user.id,
           type: txType,
           amount: parsedAmount,
           category: category.trim(),
@@ -151,16 +143,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Supabase error inserting transaction:", error);
       return NextResponse.json(
         { error: `Database error: ${error.message}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(mapRow(newRow), { status: 201 });
+    return NextResponse.json(mapRow(newRow as TxRow), { status: 201 });
   } catch (error) {
-    console.error("Internal Server Error in POST /api/transactions:", error);
     return NextResponse.json(
       { error: `Internal Server Error: ${errMsg(error)}` },
       { status: 500 }
@@ -168,10 +158,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT /api/transactions
 export async function PUT(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const body = await request.json();
     const { id, type, amount, category, date, notes } = body;
@@ -190,14 +181,12 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
-
     if (!category || typeof category !== "string" || !category.trim()) {
       return NextResponse.json(
         { error: "A valid category is required." },
         { status: 400 }
       );
     }
-
     if (!date) {
       return NextResponse.json(
         { error: "Transaction date is required." },
@@ -217,28 +206,25 @@ export async function PUT(request: NextRequest) {
       date,
       notes: notes ? notes.trim() : "",
     };
-    if (VALID_TYPES.includes(type)) {
-      updatePayload.type = type;
-    }
+    if (VALID_TYPES.includes(type)) updatePayload.type = type;
 
     const { data: updatedRow, error } = await supabase
       .from("transactions")
       .update(updatePayload)
       .eq("id", id)
+      .eq("user_id", user.id)
       .select()
       .single();
 
     if (error) {
-      console.error("Supabase error updating transaction:", error);
       return NextResponse.json(
         { error: `Database error: ${error.message}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(mapRow(updatedRow));
+    return NextResponse.json(mapRow(updatedRow as TxRow));
   } catch (error) {
-    console.error("Internal Server Error in PUT /api/transactions:", error);
     return NextResponse.json(
       { error: `Internal Server Error: ${errMsg(error)}` },
       { status: 500 }
@@ -246,14 +232,13 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE /api/transactions?id=id
 export async function DELETE(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
 
+  try {
+    const id = new URL(request.url).searchParams.get("id");
     if (!id) {
       return NextResponse.json(
         { error: "Query parameter 'id' is required for deletion." },
@@ -261,10 +246,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) {
-      console.error("Supabase error deleting transaction:", error);
       return NextResponse.json(
         { error: `Database error: ${error.message}` },
         { status: 500 }
@@ -276,7 +264,6 @@ export async function DELETE(request: NextRequest) {
       message: "Transaction deleted successfully.",
     });
   } catch (error) {
-    console.error("Internal Server Error in DELETE /api/transactions:", error);
     return NextResponse.json(
       { error: `Internal Server Error: ${errMsg(error)}` },
       { status: 500 }

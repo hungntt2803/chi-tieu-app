@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireUser } from "@/lib/api-guard";
 import { CategoryConfig, TransactionType } from "@/types";
 import { DEFAULT_CATEGORIES } from "@/lib/categories";
 
 const VALID_TYPES: TransactionType[] = ["income", "expense"];
-
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 interface CategoryRow {
@@ -29,8 +28,14 @@ function mapRow(c: CategoryRow): CategoryConfig {
   };
 }
 
-// GET /api/categories  -> trả danh mục từ DB, fallback về danh mục mặc định.
 export async function GET() {
+  const auth = await requireUser();
+  if (auth.error) {
+    // Chưa login: vẫn trả danh mục mặc định cho UI login/fallback
+    return NextResponse.json({ categories: DEFAULT_CATEGORIES, source: "fallback" });
+  }
+  const { supabase } = auth;
+
   try {
     const { data, error } = await supabase
       .from("categories")
@@ -39,19 +44,23 @@ export async function GET() {
       .order("sort_order", { ascending: true });
 
     if (error || !data || data.length === 0) {
-      if (error) console.warn("Categories fallback (DB error):", error.message);
       return NextResponse.json({ categories: DEFAULT_CATEGORIES, source: "fallback" });
     }
 
-    return NextResponse.json({ categories: (data as CategoryRow[]).map(mapRow), source: "db" });
-  } catch (error) {
-    console.error("Internal Server Error in GET /api/categories:", error);
+    return NextResponse.json({
+      categories: (data as CategoryRow[]).map(mapRow),
+      source: "db",
+    });
+  } catch {
     return NextResponse.json({ categories: DEFAULT_CATEGORIES, source: "fallback" });
   }
 }
 
-// POST /api/categories  -> tạo danh mục tùy chỉnh.
 export async function POST(request: NextRequest) {
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const body = await request.json();
     const { name, icon, color, type } = body;
@@ -66,6 +75,7 @@ export async function POST(request: NextRequest) {
       .from("categories")
       .insert([
         {
+          user_id: user.id,
           name: name.trim(),
           icon: icon || "HelpCircle",
           color: color || "slate",
@@ -78,13 +88,11 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Supabase error inserting category:", error);
       return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 });
     }
 
-    return NextResponse.json(mapRow(newRow), { status: 201 });
+    return NextResponse.json(mapRow(newRow as CategoryRow), { status: 201 });
   } catch (error) {
-    console.error("Internal Server Error in POST /api/categories:", error);
     return NextResponse.json(
       { error: `Internal Server Error: ${errMsg(error)}` },
       { status: 500 }
@@ -92,12 +100,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/categories?id=id  -> chỉ xóa danh mục tùy chỉnh (không xóa mặc định).
 export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
 
+  try {
+    const id = new URL(request.url).searchParams.get("id");
     if (!id) {
       return NextResponse.json(
         { error: "Query parameter 'id' is required for deletion." },
@@ -109,16 +118,15 @@ export async function DELETE(request: NextRequest) {
       .from("categories")
       .delete()
       .eq("id", id)
+      .eq("user_id", user.id)
       .eq("is_default", false);
 
     if (error) {
-      console.error("Supabase error deleting category:", error);
       return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Internal Server Error in DELETE /api/categories:", error);
     return NextResponse.json(
       { error: `Internal Server Error: ${errMsg(error)}` },
       { status: 500 }

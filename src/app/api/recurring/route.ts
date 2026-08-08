@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { requireSupabaseEnv } from "@/lib/api-guard";
+import { requireUser } from "@/lib/api-guard";
 import type { TransactionType } from "@/types";
 
 export interface RecurringTransaction {
@@ -49,11 +48,9 @@ function nextDateAfter(
   dayOfMonth: number | null
 ) {
   const d = new Date(from);
-  if (frequency === "daily") {
-    d.setDate(d.getDate() + 1);
-  } else if (frequency === "weekly") {
-    d.setDate(d.getDate() + 7);
-  } else {
+  if (frequency === "daily") d.setDate(d.getDate() + 1);
+  else if (frequency === "weekly") d.setDate(d.getDate() + 7);
+  else {
     const day = dayOfMonth || d.getDate();
     d.setMonth(d.getMonth() + 1);
     d.setDate(Math.min(day, 28));
@@ -61,14 +58,16 @@ function nextDateAfter(
   return d.toISOString().split("T")[0];
 }
 
-// GET /api/recurring
 export async function GET() {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const { data, error } = await supabase
       .from("recurring_transactions")
       .select("*")
+      .eq("user_id", user.id)
       .order("next_run_date", { ascending: true });
 
     if (error) {
@@ -80,10 +79,11 @@ export async function GET() {
   }
 }
 
-// POST /api/recurring — tạo mới hoặc chạy phát sinh (action=run)
 export async function POST(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const body = await request.json();
 
@@ -92,10 +92,10 @@ export async function POST(request: NextRequest) {
       const { data: due, error } = await supabase
         .from("recurring_transactions")
         .select("*")
+        .eq("user_id", user.id)
         .eq("active", true)
         .lte("next_run_date", today);
 
-      // Bảng chưa tạo / chưa migration: bỏ qua im lặng
       if (error) {
         return NextResponse.json({
           success: false,
@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
         const item = mapRow(row);
         const { error: insertErr } = await supabase.from("transactions").insert([
           {
+            user_id: user.id,
             type: item.type,
             amount: item.amount,
             category: item.category,
@@ -127,7 +128,8 @@ export async function POST(request: NextRequest) {
         await supabase
           .from("recurring_transactions")
           .update({ next_run_date: next })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .eq("user_id", user.id);
         created += 1;
       }
 
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
       .from("recurring_transactions")
       .insert([
         {
+          user_id: user.id,
           type: type === "income" ? "income" : "expense",
           amount: parsed,
           category: String(category).trim(),
@@ -169,10 +172,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/recurring?id=
 export async function DELETE(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
@@ -181,7 +185,8 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from("recurring_transactions")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", user.id);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

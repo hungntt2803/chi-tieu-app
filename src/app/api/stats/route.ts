@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { requireSupabaseEnv } from "@/lib/api-guard";
+import { requireUser } from "@/lib/api-guard";
 import { shiftMonth } from "@/lib/format";
 
 interface TxRow {
@@ -25,21 +24,11 @@ function summarize(rows: TxRow[]) {
   return { income, expense, balance: income - expense, byCategory };
 }
 
-async function fetchMonth(month: string) {
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("type, amount, category, date")
-    .gte("date", `${month}-01`)
-    .lte("date", `${month}-31`);
-  if (error) throw error;
-  return (data || []) as TxRow[];
-}
-
-// GET /api/stats?month=YYYY-MM
-// Trả thống kê tháng hiện tại, tháng trước, và xu hướng 6 tháng.
 export async function GET(request: NextRequest) {
-  const missing = requireSupabaseEnv();
-  if (missing) return missing;
+  const auth = await requireUser();
+  if (auth.error) return auth.error;
+  const { supabase, user } = auth;
+
   try {
     const month = new URL(request.url).searchParams.get("month");
     if (!month) {
@@ -52,6 +41,17 @@ export async function GET(request: NextRequest) {
     const prevMonth = shiftMonth(month, -1);
     const months: string[] = [];
     for (let i = 5; i >= 0; i--) months.push(shiftMonth(month, -i));
+
+    const fetchMonth = async (m: string) => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("type, amount, category, date")
+        .eq("user_id", user.id)
+        .gte("date", `${m}-01`)
+        .lte("date", `${m}-31`);
+      if (error) throw error;
+      return (data || []) as TxRow[];
+    };
 
     const [currentRows, prevRows, ...trendRows] = await Promise.all([
       fetchMonth(month),
@@ -99,7 +99,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error("GET /api/stats:", error);
     return NextResponse.json({ error: `Database error: ${msg}` }, { status: 500 });
   }
 }

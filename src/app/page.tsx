@@ -38,6 +38,7 @@ import { TransactionList } from "@/components/TransactionList";
 import { TransactionFormModal } from "@/components/TransactionFormModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ShareQrModal } from "@/components/ShareQrModal";
+import { UserMenu } from "@/components/UserMenu";
 
 const ChartsPanel = dynamic(
   () => import("@/components/ChartsPanel").then((m) => m.ChartsPanel),
@@ -336,6 +337,7 @@ export default function ExpenseTracker() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <UserMenu />
           <button
             type="button"
             onClick={toggleTheme}
