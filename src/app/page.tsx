@@ -5,11 +5,11 @@ import dynamic from "next/dynamic";
 import {
   AlertCircle,
   Calendar,
-  Download,
   Filter,
   Loader2,
   Moon,
   Plus,
+  QrCode,
   RefreshCw,
   Search,
   Sun,
@@ -26,7 +26,6 @@ import type {
 } from "@/types";
 import { DEFAULT_CATEGORIES, getDefaultCategoriesByType } from "@/lib/categories";
 import {
-  exportTransactionsCsv,
   formatVND,
   getMonthLabel,
   getMonthOptions,
@@ -38,6 +37,7 @@ import { CategoryBudgetPanel } from "@/components/CategoryBudgetPanel";
 import { TransactionList } from "@/components/TransactionList";
 import { TransactionFormModal } from "@/components/TransactionFormModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ShareQrModal } from "@/components/ShareQrModal";
 
 const ChartsPanel = dynamic(
   () => import("@/components/ChartsPanel").then((m) => m.ChartsPanel),
@@ -94,6 +94,7 @@ export default function ExpenseTracker() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   const findCategory = useCallback(
     (name: string): CategoryConfig =>
@@ -345,16 +346,12 @@ export default function ExpenseTracker() {
           </button>
           <button
             type="button"
-            onClick={() =>
-              exportTransactionsCsv(
-                filteredTransactions,
-                `chi-tieu-${selectedMonth}.csv`
-              )
-            }
+            onClick={() => setQrOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-slate-600 dark:text-zinc-300"
+            aria-label="Mã QR mở app"
           >
-            <Download className="h-3.5 w-3.5" />
-            Xuất CSV
+            <QrCode className="h-3.5 w-3.5" />
+            Mã QR
           </button>
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-slate-400" />
@@ -646,6 +643,8 @@ export default function ExpenseTracker() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteId(null)}
       />
+
+      <ShareQrModal open={qrOpen} onClose={() => setQrOpen(false)} />
     </div>
   );
 }

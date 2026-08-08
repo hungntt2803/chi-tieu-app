@@ -68,36 +68,3 @@ export const percentChange = (current: number, previous: number) => {
   if (previous === 0) return current === 0 ? 0 : 100;
   return Math.round(((current - previous) / previous) * 100);
 };
-
-export const exportTransactionsCsv = (
-  rows: {
-    date: string;
-    type: string;
-    category: string;
-    amount: number;
-    notes: string;
-  }[],
-  filename: string
-) => {
-  const header = "Ngày,Loại,Danh mục,Số tiền,Ghi chú";
-  const body = rows
-    .map((r) =>
-      [
-        r.date,
-        r.type === "income" ? "Thu nhập" : "Chi tiêu",
-        `"${r.category.replace(/"/g, '""')}"`,
-        r.amount,
-        `"${(r.notes || "").replace(/"/g, '""')}"`,
-      ].join(",")
-    )
-    .join("\n");
-  const blob = new Blob(["\uFEFF" + header + "\n" + body], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-};

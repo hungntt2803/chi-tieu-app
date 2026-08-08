@@ -17,7 +17,8 @@
 - Ngân sách theo từng danh mục + cảnh báo ≥90%.
 - Giao dịch định kỳ (`recurring_transactions`) — tự phát sinh khi mở app.
 - Lọc nâng cao (loại, danh mục, khoảng số tiền) + tìm kiếm.
-- Xuất CSV, toggle Dark/Light, PWA (manifest + service worker).
+- Mã QR chia sẻ link app (nút trên header).
+- Toggle Dark/Light, PWA (manifest + service worker).
 - Toast (sonner), modal thêm giao dịch (FAB), modal xác nhận xóa.
 
 ## Cấu hình
