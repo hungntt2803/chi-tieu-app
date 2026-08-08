@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Chi Tiêu App — Quản lý tài chính cá nhân
 
-## Getting Started
+Ứng dụng theo dõi thu chi cá nhân (tiếng Việt), xây dựng bằng **Next.js 16
+(App Router) + React 19 + Tailwind CSS v4 + Supabase + lucide-react + recharts**.
 
-First, run the development server:
+## Tính năng
+
+### Giai đoạn 1 — Nền tảng
+- Thêm / sửa / xóa giao dịch theo tháng.
+- **Thu nhập** và **Chi tiêu** (`type`).
+- Danh mục động từ Supabase (fallback mặc định).
+- Hạn mức tháng lưu trên Supabase + cache localStorage.
+
+### Giai đoạn 2 — App thực tế
+- Dashboard: số dư, tổng thu, tổng chi + % so với tháng trước.
+- Biểu đồ: donut phân bổ chi, area xu hướng 6 tháng, bar thu vs chi.
+- Ngân sách theo từng danh mục + cảnh báo ≥90%.
+- Giao dịch định kỳ (`recurring_transactions`) — tự phát sinh khi mở app.
+- Lọc nâng cao (loại, danh mục, khoảng số tiền) + tìm kiếm.
+- Xuất CSV, toggle Dark/Light, PWA (manifest + service worker).
+- Toast (sonner), modal thêm giao dịch (FAB), modal xác nhận xóa.
+
+## Cấu hình
+
+Tạo `.env.local`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your-anon-or-publishable-key>
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Thiết lập database (Supabase SQL Editor)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Chạy lần lượt:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. `supabase/migrations/0001_init_finance_schema.sql`
+2. `supabase/migrations/0002_seed_default_categories.sql`
+3. `supabase/migrations/0003_recurring_transactions.sql`
+4. (Khuyến nghị) `supabase/seed/mock_transactions.sql` — dữ liệu mẫu 6 tháng
 
-## Learn More
+## Chạy
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm install
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Mở [http://localhost:3000](http://localhost:3000).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build
+npm run lint
+```
 
-## Deploy on Vercel
+## Cấu trúc
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  app/page.tsx                 # UI chính
+  app/api/{transactions,categories,budgets,stats,recurring}/
+  components/                  # Dashboard, Charts, Form, List, Theme...
+  hooks/useLocalStorage.ts
+  lib/{supabase,categories,format}.ts
+  types/index.ts
+supabase/migrations|seed/
+public/{manifest.webmanifest,sw.js,icon-*.png}
+```
